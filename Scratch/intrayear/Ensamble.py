@@ -1,22 +1,21 @@
 import numpy as np
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import AgglomerativeClustering, SpectralClustering, KMeans
+
 
 class ClusteringEnsamble:
-    def __init__(self, method='CSPA', n_clusters=4):
+    def __init__(self, method='CSPA', n_clusters=4, random_state=41):
         self.method = method
         self.nclusters = n_clusters
+        self.random_state=random_state
 
     def transform(self, labels, weight_vector = []):
         if len(weight_vector) == 0:
             weight_vector = np.ones(len(labels[0]))
 
-
         self.__avg_similarity__(labels, weight_vector)
-        return AgglomerativeClustering(
-            metric='precomputed', 
-            n_clusters=self.nclusters, 
-            linkage='complete'
-        ).fit(1-self.avg_sim).labels_
+
+        # return SpectralClustering(affinity='precomputed', n_clusters=self.nclusters, n_jobs=-1, random_state=self.random_state).fit_predict(self.avg_sim)
+        return KMeans(n_clusters=self.nclusters, random_state=self.random_state).fit_predict(self.avg_sim)
 
     def __avg_similarity__(self, labels, weight_vector: list):
         self.nclusterers_ = len(labels)

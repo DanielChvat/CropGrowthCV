@@ -1,33 +1,29 @@
-from sklearn.model_selection import cross_validate, GroupKFold
-from sklearn.cluster import KMeans
+from sklearn.model_selection import cross_validate, ShuffleSplit
 from sklearn.metrics import root_mean_squared_error
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from IPython.display import display
 
-class GroupKFoldCV:
-    def __init__(self, models, n_folds=4, scoring = ['neg_root_mean_squared_error', 'r2'], date='', test_size=0.3, random_state=42, n_clusters=4, method='LOFO'):
+class RandomCV:
+    def __init__(self, models, n_folds=5, scoring = ['neg_root_mean_squared_error', 'r2'], date='', test_size=0.3, random_state=42):
         self.models_ = models
         self.n_folds = n_folds
         self.scoring_ = scoring
         self.test_size = test_size
         self.random_state = random_state
-        self.n_clusters = n_clusters
-        self.method = method
         self.fold_results = {}
 
-        self.results_table = pd.DataFrame(columns=['GroupKFold', 'TYPE', 'RMSE_AVG', 'R2_AVG', 'RMSE STD', 'R2 STD'])
+        self.results_table = pd.DataFrame(columns=['Random', 'TYPE', 'RMSE_AVG', 'R2_AVG', 'RMSE STD', 'R2 STD'])
 
     def __run__(self):
-        self.clusters = KMeans(n_clusters=self.n_clusters, random_state=self.random_state).fit(self.X_train_validate).labels_
-        self.gkf = GroupKFold(n_splits=self.n_folds)
+        self.cv_method = ShuffleSplit(n_splits=self.n_folds, test_size=self.test_size, random_state=self.random_state)
         for name in self.models_:
             model = self.models_[name]
-            scores = cross_validate(model, self.X_train_validate, self.y_train_validate, return_estimator=True, scoring=self.scoring_, cv=self.gkf, groups=self.clusters)
+            scores = cross_validate(model, self.X_train_validate, self.y_train_validate, scoring=self.scoring_, cv=self.cv_method, return_estimator=True)
             cv_RMSE_ = -scores['test_neg_root_mean_squared_error']
             cv_R2 = scores['test_r2']
-
+            
             test_scores = {'R2': [], 'RMSE': []}
 
             for estimator in scores['estimator']:
@@ -50,9 +46,8 @@ class GroupKFoldCV:
             self.results_table.loc[len(self.results_table.index)] = [f'{name}', 'CV', np.average(cv_RMSE_), np.average(cv_R2), cv_RMSE_std, cv_R2_std]
             self.results_table.loc[len(self.results_table.index)] = [f'{name}', 'TEST', np.average(test_scores['RMSE']), np.average(test_scores['R2']), test_RMSE_std, test_R2_std]
         
-
     def display_fold(self, fold_index: np.int32):
-        splits = self.gkf.split(self.X_train_validate, self.y_train_validate, self.clusters)
+        splits = self.cv_method.split(self.X_train_validate, self.y_train_validate)
         train_indices, test_indices = [list(traintest) for traintest in zip(*splits)]
         folds = [*zip(train_indices,test_indices)]
 
@@ -65,21 +60,16 @@ class GroupKFoldCV:
         plt.scatter(train['X'], train['Y'], color='black', label='Train')
         plt.scatter(validate['X'], validate['Y'], color='red', label='Validate')
         plt.legend()
-        plt.title("GKF Clustering Fold")
+        plt.title("Random CV Fold")
         plt.show()
 
-        print('Train Samples            : ', len(fold_train_indices))
-        print('Validate Samples         : ', len(fold_validate_indices))
-        print('LR Fold RMSE Scores      : ', self.fold_results['LR']['RMSE'])
-        print('LR Fold R2 Scores        : ', self.fold_results['LR']['R2'])
-        print('RF Fold RMSE Scores      : ', self.fold_results['RF']['RMSE'])
-        print('RF Fold R2 Scores        : ', self.fold_results['RF']['R2'])
+        print('Train Samples   : ', len(fold_train_indices))
+        print('Validate Samples: ', len(fold_validate_indices))
+        print('LR Fold CV RMSE Scores: ', self.fold_results['LR']['RMSE'])
+        print('LR Fold CV R2 Scores  : ', self.fold_results['LR']['R2'])
+        print('RF Fold CV RMSE Scores: ', self.fold_results['RF']['RMSE'])
+        print('RF Fold CV R2 Scores  : ', self.fold_results['RF']['R2'])
 
-    def display_clusters(self):
-        plt.scatter(self.train_spatial_coordinates['X'], self.train_spatial_coordinates['Y'], c=self.clusters)
-        plt.title("GKF Clustering Results")
-        plt.show()
-    
     def results(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.DataFrame, y_test: pd.DataFrame):
         spatial_cols = ['X', 'Y']
         feature_cols = [col for col in X_train.columns if col not in spatial_cols]
